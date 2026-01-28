@@ -3,5 +3,7 @@
     "port": "34197",
     "server_settings": "server_settings.json", 
     "factorio_directory": "./factorio/bin/x64/factorio",
+    "rcon_port": "34200",
+    "rcon_password": "sudojimi",
     "startup_command": "None"
 }

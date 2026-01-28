@@ -33,7 +33,11 @@ class FactorioController:
                     "--start-server",
                     f"./factorio/saves/{config['save_name']}",
                     "--server-settings",
-                    f"./factorio/data/{config['server_settings']}"
+                    f"./factorio/data/{config['server_settings']}",
+                    "--rcon-port",
+                    f"{config['rcon_port']}",
+                    "--rcon-password",
+                    f"{config['rcon_password']}"
                 ]
             else:   # if there is customized command, use it
                 self.startup_command = config["startup_command"]
