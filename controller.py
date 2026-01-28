@@ -56,7 +56,7 @@ class FactorioController:
         server = subprocess.Popen(
             self.startup_command,
             stdin = subprocess.PIPE,
-            stdout = subprocess.STDOUT,
+            stdout = subprocess.PIPE,
             stderr = subprocess.STDOUT,
             universal_newlines = True,
             bufsize=1
