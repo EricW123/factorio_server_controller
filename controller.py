@@ -44,7 +44,7 @@ class FactorioController:
 
         # check if save folder is created
         Path(f"saves/{self.save_name}").mkdir(parents=True, exist_ok=True)
-        self.server: subprocess.Popen[bytes] | None = None
+        self.server = None
         # run the server
         # self.start_server()
 
@@ -56,7 +56,7 @@ class FactorioController:
         server = subprocess.Popen(
             self.startup_command,
             stdin = subprocess.PIPE,
-            stdout = subprocess.PIPE,
+            stdout = subprocess.STDOUT,
             stderr = subprocess.STDOUT,
             universal_newlines = True,
             bufsize=1
