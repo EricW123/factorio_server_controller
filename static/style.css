@@ -1,0 +1,95 @@
+body {
+    padding: 0 30px;
+}
+
+#rconDesc {
+    margin-left: 10px;
+    cursor: help;
+}
+
+#div1 {
+    display: flex;
+    width: 100%;
+    height: 600px;
+}
+    
+#logDiv {
+    display: flex;
+    flex-direction: column;
+    min-width: 400px;
+}
+
+#logDiv > div {
+    height: 100%;
+    padding: 8px;
+    background: #f0f0f0;
+    border: 1px solid #ccc;
+    font-family: monospace;
+    font-size: 20px;
+    overflow-y: auto;
+    white-space: pre-line;
+}
+    
+#modDiv {
+    display: flex;
+    flex-direction: column;
+    width: 400px;
+    padding-right: 100px;
+}
+
+#modDiv > div {
+    height: 100%;
+    padding: 8px;
+    background: #f0f0f0;
+    border: 2px solid #ccc;
+    margin-bottom: 8px;
+}
+
+.modLi {
+    height: 60px;
+    width: 330px;
+    background-color: #2cd8ff;
+    margin: 20px;
+    padding-left: 10px;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+}
+
+.modLi > span {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.removeButton {
+    aspect-ratio: 1;
+    background-color: transparent;
+    padding: 4px;
+    margin: 6px;
+    cursor: pointer;
+}
+
+.removeButton:hover {
+    background-color: #ffcccc;
+}
+
+.removeButton:active {
+    background-color: #ff9999;
+}
+
+#addContainer {
+    cursor: pointer;
+    font-size: 50px;
+    display: flex;
+    justify-content: center;
+}
+
+#addContainer:hover {
+    background-color: #32cd32;
+}
+
+#addContainer:active {
+    background-color: #228b22;
+}

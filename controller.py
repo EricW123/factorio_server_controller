@@ -15,33 +15,50 @@ FILE_PER_PAGE = 5       # max file display in one page (for saves lookup)
 
 class FactorioController:
     """
-    Note that due to the fact that the subprocess will forward the CTRL C command (SIGINT) to the subprocess, a shutdown function is not needed. 
+    Note that due to the fact that the subprocess will forward the CTRL C
+    command (SIGINT) to the subprocess, a shutdown function is not needed. 
     """
-    
+
     def __init__(self, config_file: str) -> None:
         # read the config.json file and initialize startup command
         with open(config_file, encoding="utf-8") as f:
             config = json.load(f)
             # if no customized command, use default startup
-            if (config["startup_command"] == "None"): 
+            if config["startup_command"] == "None":
                 self.save_name = config["save_name"]
                 self.factorio_dir = config["factorio_directory"]
-                self.startup_command = [self.factorio_dir, f"--port {config['port']}", "--start-server", f"./factorio/saves/{config['save_name']}", "--server-settings", f"./factorio/data/{config['server_settings']}"]
+                self.startup_command = [
+                    self.factorio_dir,
+                    f"--port {config['port']}", 
+                    "--start-server",
+                    f"./factorio/saves/{config['save_name']}",
+                    "--server-settings",
+                    f"./factorio/data/{config['server_settings']}"
+                ]
             else:   # if there is customized command, use it
                 self.startup_command = config["startup_command"]
-        
+
         # check if save folder is created
         Path(f"saves/{self.save_name}").mkdir(parents=True, exist_ok=True)
+        self.server: subprocess.Popen[bytes] | None = None
         # run the server
-        self.start_server()
+        # self.start_server()
 
     def start_server(self):
         """ 
-        Set stdin and stdout to pipe, and redirect stderr to stdout. set universal_newlines and bufsize for stdin input. 
+        Set stdin and stdout to pipe, and redirect stderr to stdout.
+        set universal_newlines and bufsize for stdin input. 
         """
-        server = subprocess.Popen(self.startup_command, stdin = subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, bufsize=1)
+        server = subprocess.Popen(
+            self.startup_command,
+            stdin = subprocess.PIPE,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.STDOUT,
+            universal_newlines = True,
+            bufsize=1
+        )
         self.server = server
-    
+
     def stop_server(self):
         """ 
         Send ctrl-c to the factorio server, then wait for it to close. 
@@ -55,92 +72,105 @@ class FactorioController:
         """
         self.stop_server()
         self.start_server()
-    
+
     def print_to_server(self, msg: str, username: str = ""):
         """
         Print command to factorio server
         Args:
             msg (str): input commands
         """
-        if (username == ""):
+        if username == "":
             print(msg, file = self.server.stdin, flush = True)
         else:
             print(f"/w {username} {msg}", file = self.server.stdin, flush = True)
         line = self.server.stdout.readline()
         print(f"server: {line}", flush = True, end = "")
 
-    def handle_command(self, cmd: str): 
+    def handle_command(self, msg: str):
         """ Read outputs from server and handle them
 
         Args:
-            cmd (str): output commands
+            msg (str): output commands
         """
+        # user message format:
+        # yyyy-mm-dd hh:mm:ss [JOIN] <username> joined the game
+        # yyyy-mm-dd hh:mm:ss [CHAT] <username>: message
+        # yyyy-mm-dd hh:mm:ss [LEAVE] <username> left the game
 
-        # if unrelated cmd, return
-        if (len(cmd) < 26):
+        # server message format:
+        # yyyy-mm-dd hh:mm:ss [CHAT] \<server\>: message
+
+        # if unrelated message, return
+        if len(msg) < 26:
             return
-        
-        # check commands and react to them
-        cmd = cmd.split(" ")
+
+        msg_date, msg_time, tag, username, *cmds = msg.split(" ")
+        username = username.strip(":")
+        cmds = [s.strip() for s in cmds]
+
+        # if command not from chat, ignore
+        if tag != "[CHAT]":
+            return
+
+        if username == "<server>":
+            return
 
         # if command from chat, check if there's any available commands
-        if (cmd[2] == "[CHAT]"):
-            if (cmd[-1] == "!!restart\n"):
-                self.print_to_server("Receive restart signal. Restarting the server...")
-                time.sleep(1)
-                self.restart_server()
-            elif (cmd[-1] == "!!shutdown\n"):
-                self.print_to_server("Receive shutdown signal. Shutting down the server...")
-                time.sleep(1)
-                self.stop_server()
+        if cmds[0] == "!!restart":
+            self.print_to_server("Receive restart signal. Restarting the server...")
+            time.sleep(1)
+            self.restart_server()
+        elif cmds[0] == "!!shutdown":
+            self.print_to_server("Receive shutdown signal. Shutting down the server...")
+            time.sleep(1)
+            self.stop_server()
 
-            # load the designated autosave
-            elif (cmd[-2] == "!!la" and cmd[-1][:-1].isdigit()):
-                self.print_to_server("Receive load_autosave signal. loading autosave...")
-                target = int(cmd[-1][:-1])
-                self.load_autosave(target)
+        # load the designated autosave
+        elif cmds[0] == "!!la" and cmds[1].isdigit():
+            self.print_to_server("Receive load_autosave signal. loading autosave...")
+            target = int(cmds[1])
+            self.load_autosave(target)
 
-            # load the latest autosave
-            elif (cmd[-1][:-1] == "!!la"):
-                self.print_to_server("Receive load_autosave signal. loading autosave...")
-                target = 1
-                self.load_autosave(target)
+        # load the latest autosave
+        elif cmds[0] == "!!la":
+            self.print_to_server("Receive load_autosave signal. loading autosave...")
+            target = 1
+            self.load_autosave(target)
 
-            # print out help menu
-            elif (cmd[-1] == "!!help\n"):
-                username = cmd[3][:-1]
-                self.print_to_server("!!shutdown         ->  shutdown the server\n", username)
-                self.print_to_server("!!restart          ->  restart the server\n", username)
-                self.print_to_server("!!la m             ->  load the autosaved file m files before current save, default m = 1\n", username)
-                self.print_to_server("!!save             ->  save the current file immediately\n", username)
-                self.print_to_server("!!ls               ->  load the previously saved file\n", username)
-                self.print_to_server("!!ls ?             ->  check all saved file and restore from them\n", username)
+        # print out help menu
+        elif cmds[0] == "!!help":
+            self.print_to_server("!!shutdown         ->  shutdown the server\n", username)
+            self.print_to_server("!!restart          ->  restart the server\n", username)
+            self.print_to_server("!!la m             ->  load the autosaved file m files before current save, default m = 1\n", username)
+            self.print_to_server("!!save             ->  save the current file immediately\n", username)
+            self.print_to_server("!!ls               ->  load the previously saved file\n", username)
+            self.print_to_server("!!ls ?             ->  check all saved file and restore from them\n", username)
 
-            # save current save
-            elif (cmd[-1] == "!!save\n"):
-                self.print_to_server("Receive save signal. Saving current file...")
-                self.save_current("request_save", cmd[3][:-1])
+        # save current save
+        elif cmds[0] == "!!save":
+            self.print_to_server("Receive save signal. Saving current file...")
+            self.save_current("request_save", username)
 
-            # load the latest save
-            elif (cmd[-1] == "!!ls\n"):
-                self.print_to_server("Receive load_last_save signal. Loading last save...")
-                self.load_last_save()
-            
-            # save current save with custom name
-            elif (cmd[-2] == "!!save"):
-                self.print_to_server("Receive save signal. Saving current file...")
-                self.save_current(cmd[-1][:-1], cmd[3][:-1])
+        # load the latest save
+        elif cmds[0] == "!!ls":
+            self.print_to_server("Receive load_last_save signal. Loading last save...")
+            self.load_last_save()
 
-            # print out all saved files and let user to choose which to restore
-            elif (cmd[-2] == "!!ls" and cmd[-1][:-1] == "?"):
-                self.load_requested_save()
-            
+        # print out all saved files and let user to choose which to restore
+        elif cmds[0] == "!!ls" and cmds[1] == "?":
+            self.load_requested_save()
+
+        # save current save with custom name
+        elif cmds[0] == "!!save":
+            self.print_to_server("Receive save signal. Saving current file...")
+            self.save_current(cmds[1], username)
+
         return
 
     def run(self):
         while True:
             self.wget_next_msg(handle=self.handle_command)
-            if (self.server.poll() is not None):
+            if self.server.poll() is not None:
                 sys.exit(0)
 
     def save_current(self, filename:str = "autosave", commander: str = "server"):
@@ -156,10 +186,13 @@ class FactorioController:
         line = self.server.stdout.readline()
         print(f"server: {line}", flush = True, end = "")
         line = line.split(" ")
-        if (line[-1] == "finished\n"):
+        if line[-1] == "finished\n":
             print("Saving is successful. Copying files now...")
             current_time = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
-            shutil.copy2(f"./factorio/saves/{self.save_name}", f"./saves/{self.save_name}/{current_time}_{filename}_{commander}")
+            shutil.copy2(
+                f"./factorio/saves/{self.save_name}",
+                f"./saves/{self.save_name}/{current_time}_{filename}_{commander}"
+            )
         else:
             # TODO: what the code should do if saving failed
             print("Saving failed. ")
@@ -178,8 +211,9 @@ class FactorioController:
         self.stop_server()
 
         # get autosave files and sort them in last modified time
-        save_files = sorted(Path(f"saves/{self.save_name}").iterdir(), key=os.path.getmtime, reverse = True)
-        save_files = list(i for i in save_files if ("autosave_server" not in str(i)))
+        save_files = sorted(Path(f"saves/{self.save_name}").iterdir(),
+                            key=os.path.getmtime, reverse = True)
+        save_files = list(i for i in save_files if "autosave_server" not in str(i))
         target_autosave = save_files[0]
         shutil.copy2(target_autosave, f"./factorio/saves/{self.save_name}")
 
@@ -204,16 +238,16 @@ class FactorioController:
 
         # get autosave files and sort them in last modified time
         save_files = sorted(Path("factorio/saves/").iterdir(), key=os.path.getmtime, reverse = True)
-        save_files = list(i for i in save_files if ("_autosave" in str(i)))
+        save_files = list(i for i in save_files if "_autosave" in str(i))
         target_autosave = save_files[target]
         shutil.copy2(target_autosave, f"./factorio/saves/{self.save_name}")
 
         # bootup server
         self.start_server()
-        
+
     def wget_next_msg(self, handle = None):
         """
-        wait to get next message from server.stdout or sys.stdin and route it to the corresponding port.
+        wait to get next message from server.stdout or sys.stdin and route it to corresponding port.
         also return the message if it's from server.stdout.
         Args:
             handle (optional): the function to handle the message from server.stdout
@@ -222,14 +256,14 @@ class FactorioController:
         read_fds = [self.server.stdout, sys.stdin]
         read_fds, _, _ = select.select(read_fds, [], [])
         for fd in read_fds:
-            # if got something in sys.stdin, send it to the factorio server. 
-            if (fd == sys.stdin):
+            # if got something in sys.stdin, send it to the factorio server.
+            if fd == sys.stdin:
                 line = sys.stdin.readline()
                 print(line, file = self.server.stdin, flush = True)
-            else: # if got something in server.stdout, print it to sys.out. 
+            else: # if got something in server.stdout, print it to sys.out.
                 cmd = self.server.stdout.readline()
                 print(f"server: {cmd}", flush = True, end = "")
-                if (handle is not None):
+                if handle is not None:
                     handle(cmd)
         return cmd
 
@@ -246,21 +280,21 @@ class FactorioController:
         """
         new_page_index = page_index
         req_index = None
-        if (cmd[:-1] == "m"):
-            if (page_index + FILE_PER_PAGE < n_files):
+        if cmd[:-1] == "m":
+            if page_index + FILE_PER_PAGE < n_files:
                 new_page_index += FILE_PER_PAGE
             else:
                 self.print_to_server("[color=red]ERROR: this is the last page.[/color]")
-        elif (cmd[:-1] == "n"):
-            if (page_index - FILE_PER_PAGE >= 0):
+        elif cmd[:-1] == "n":
+            if page_index - FILE_PER_PAGE >= 0:
                 new_page_index -= FILE_PER_PAGE
             else:
                 self.print_to_server("[color=red]ERROR: this is the first page.[/color]")
-        elif (cmd[:-1] == "q"):
+        elif cmd[:-1] == "q":
             new_page_index = None
-        elif (cmd[:-1].isdigit()):
+        elif cmd[:-1].isdigit():
             req_index = int(cmd[:-1])
-            if (req_index > FILE_PER_PAGE or req_index <= 0):
+            if req_index > FILE_PER_PAGE or req_index <= 0:
                 self.print_to_server("invalid file number. ")
                 req_index = None
         else:
@@ -268,7 +302,7 @@ class FactorioController:
             self.print_to_server("choose the save you wish to recover. ")
             self.print_to_server("enter the index to choose the save file, [color=#FF3F3F]n[/color] to view previous page, [color=#FF3F3F]m[/color] to view next page, or [color=#FF3F3F]q[/color] to quit.")
         return new_page_index, req_index
-    
+
     def parse_file_name(self, file_name: str):
         """
         parse the file name and return the save number and the save type
@@ -304,21 +338,21 @@ class FactorioController:
             while True:
                 # get next message until it's from server.stdout and [CHAT]
                 cmd = self.wget_next_msg()
-                if (cmd is None):
+                if cmd is None:
                     # message not from server.stdout
                     continue
                 cmd = cmd.split(" ")
-                if (len(cmd) > 2 and cmd[2] == "[CHAT]"):
+                if len(cmd) > 2 and cmd[2] == "[CHAT]":
                     # message from server.stdout and [CHAT]
                     cmd = cmd[-1]
                     break
-            
+
             page_index, req_index = self.handle_user_act_to_ls(cmd, page_index, n_files)
-            if (page_index is None):
+            if page_index is None:
                 # pressed 'q' for quit
                 self.print_to_server("quit save recover mode.")
                 return
-            if (req_index is not None):
+            if req_index is not None:
                 target_save = save_files[page_index + req_index - 1]
                 break
 
@@ -344,12 +378,18 @@ class FactorioController:
 
 
 def test():
-    p = subprocess.Popen(["python3", "out.py", "-l"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    p = subprocess.Popen(
+        ["python3", "out.py", "-l"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT
+    )
     # returns None while subprocess is running
     line = p.stdout.readline()
     print(line)
     sys.stdout.flush()
-    print(b"test", file=p.stdin, flush=True)
+    p.stdin.write(b"hello\n")
+    p.stdin.flush()
     line = p.stdout.readline()
     print(line)
     sys.stdout.flush()

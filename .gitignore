@@ -9,3 +9,5 @@ saves
 
 .vscode
 factorio-headless.tar.xz
+logs/
+__pycache__/

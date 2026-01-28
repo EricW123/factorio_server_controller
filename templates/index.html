@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player List</title>
+    <script src="/static/main.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div>
+        <h2>Status</h2>
+        <button onclick="startServer()">Start Server</button>
+        <button onclick="stopServer()">Stop Server</button>
+        <button onclick="updateServer()">Update Server</button>
+        <pre id="playerText">Loading...</pre>
+    </div>
+
+    <div>
+        <h2>RCON<span id="rconDesc" title="以服务器身份发送指令&#10;原样打印服务器响应, 可能有格式问题&#10;不做任何检查, 请谨慎发送"> ? &#8413;</span></h2>
+        <input type="text" id="rconCommand" placeholder="Enter RCON command">
+        <button id="submitRcon" onclick="sendRconCommand()">Send Command</button>
+        <pre id="rconResponse">rconResponse: NA</pre>
+    </div>
+    
+    {% comment %} <div id="div1">
+        <div id="modDiv">
+            <h2>Mod</h2>
+            <div id="modBox"></div>
+        </div>
+        <div id="logDiv">
+            <h2>Server Log</h2>
+            <div id="logBox"></div>
+        </div>
+    </div> {% endcomment %}
+</body>
+
+</html>
